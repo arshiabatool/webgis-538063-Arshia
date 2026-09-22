@@ -14,24 +14,24 @@ Lab 1 report\Checkpoint 5.png
 
 ### 1. In Part 2 your page made one network request. After Part 4 it made dozens. Explain in two or three sentences what changed and why.
 
-In Part 2, my webpage was a simple HTML page, so it only needed to load the basic page. In Part 4, I added the Leaflet CSS and JavaScript libraries and OpenStreetMap tiles. Because of these additional resources and map tiles, the browser had to make many more network requests to display the interactive map.
----
-
+In Part 2, my webpage was a simple HTML page containing only basic text and HTML elements, so the browser had very few resources to load. In Part 4, I added the Leaflet CSS and JavaScript libraries and OpenStreetMap as the base map. The browser then had to make additional network requests to download the Leaflet files and the many map tile images required to display the interactive map.
 ### 2. What is the difference between what HTML does and what CSS does? Give one example of each from your own file.
-HTML is used to create the structure and content of the webpage, while CSS is used to control how the webpage looks. In my file, <h1>Islamabad</h1> is an example of HTML because it creates the main heading. The h1 CSS rule is an example of CSS because it changes the heading's color and spacing.
----
+HTML and CSS have different roles in a webpage. HTML (HyperText Markup Language) is used to define the structure and content of the webpage, such as headings, paragraphs, and containers. CSS (Cascading Style Sheets) is used to control the appearance and layout of those HTML elements, such as their color, size, spacing, and position.
+For example, in my file, <h1>Islamabad</h1> is HTML because it creates the main heading of the webpage. The h1 CSS rule in my code controls the appearance of this heading by setting its margin and color. Similarly, the #map CSS rule controls the size of the container where my Leaflet map is displayed.
+
 
 ### 3. Why does the `#map` rule need a height, when the `h1` rule does not?
 
-The #map needs a height because Leaflet needs a defined space in which to display the map. If I do not give the map container a height, the map may not be visible. The h1 does not need a fixed height because its height is automatically determined by the text and the browser's default styling.
----
+The #map rule needs a height because the Leaflet map is displayed inside the <div id="map"></div> container, and the map needs a defined visible area. In my code, I set the height to 480px, which gives Leaflet enough vertical space to display the map and its tiles.
 
 ### 4. You opened your page through Live Server at `127.0.0.1` instead of double-clicking the file. Give one reason this matters.
 
-Live Server runs my webpage through a local web server instead of opening it directly as a file. This matters because web applications such as Web GIS may need to load external resources and data through HTTP, and browsers can block some requests when a page is opened using file:///.
+Opening the page through Live Server is important because it runs the webpage through a local web server using HTTP instead of opening it directly from the computer's file system. When a file is opened by double-clicking it, the browser uses a file:/// address, and some web requests and data-loading operations can be blocked by browser security rules.
+Live Server gives my webpage an address such as http://127.0.0.1:5500/index.html, so it behaves more like a real website running on a web server. This is especially important for Web GIS because later applications may need to load external libraries, map tiles, GeoJSON files, APIs, or other data resources.
+
 
 ---
 
 ### 5. A classmate's marker appears in the sea near Africa instead of in Islamabad. What is almost certainly wrong, and how would you fix it?
 
-The latitude and longitude coordinates are most likely wrong or entered in the wrong order. In Leaflet, the coordinates should be written as [latitude, longitude]. I would check the coordinates and replace them with the correct ones, such as [33.6423, 72.9906] for my NUST H-12 marker.
+The latitude and longitude coordinates used for the marker are almost certainly incorrect, or they may have been entered in the wrong order. Leaflet expects coordinates in the order [latitude, longitude], not [longitude, latitude]. If the values are incorrect or reversed, the marker can appear in a completely different location, such as in the sea near Africa.

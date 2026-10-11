@@ -2,7 +2,7 @@
 "use strict";
 
 // ======================================================
-// 1. Define the approximate map boundaries for Pakistan
+// 1. Pakistan map boundaries
 // ======================================================
 
 const pakistanLimits = L.latLngBounds(
@@ -10,20 +10,18 @@ const pakistanLimits = L.latLngBounds(
     [39.0, 80.5]
 );
 
-
 // ======================================================
-// 2. Initialize the Leaflet map
+// 2. Initialize the map
 // ======================================================
 
 const map = L.map("map", {
     maxBounds: pakistanLimits,
     maxBoundsViscosity: 1.0,
-    minZoom: 5
+    minZoom: 4
 }).setView([30.3753, 69.3451], 5);
 
-
 // ======================================================
-// 3. Add the OpenStreetMap basemap
+// 3. OpenStreetMap basemap
 // ======================================================
 
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -31,17 +29,57 @@ L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "&copy; OpenStreetMap contributors"
 }).addTo(map);
 
-
 // ======================================================
-// 4. Store the district data and map layer
+// 4. Global variables
 // ======================================================
 
 let districts = null;
-let layer = null;
-
+let districtLayer = null;
 
 // ======================================================
-// 5. Format values for popups
+// 5. Find property values safely
+// Supports different possible GeoJSON field names
+// ======================================================
+
+function getProperty(properties, names) {
+    if (!properties) return null;
+
+    // First try exact field names
+    for (const name of names) {
+        if (
+            properties[name] !== undefined &&
+            properties[name] !== null &&
+            properties[name] !== ""
+        ) {
+            return properties[name];
+        }
+    }
+
+    // Then try matching names without case/spacing differences
+    const keys = Object.keys(properties);
+
+    for (const name of names) {
+        const wanted = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+        const matchingKey = keys.find(function (key) {
+            return key.toLowerCase().replace(/[^a-z0-9]/g, "") === wanted;
+        });
+
+        if (
+            matchingKey &&
+            properties[matchingKey] !== undefined &&
+            properties[matchingKey] !== null &&
+            properties[matchingKey] !== ""
+        ) {
+            return properties[matchingKey];
+        }
+    }
+
+    return null;
+}
+
+// ======================================================
+// 6. Format popup values
 // ======================================================
 
 function show(value) {
@@ -53,27 +91,92 @@ function show(value) {
         return "Not recorded";
     }
 
-    return typeof value === "number"
-        ? value.toLocaleString()
-        : value;
+    if (typeof value === "number") {
+        return value.toLocaleString();
+    }
+
+    const number = Number(value);
+
+    if (
+        String(value).trim() !== "" &&
+        Number.isFinite(number)
+    ) {
+        return number.toLocaleString();
+    }
+
+    return String(value);
 }
 
+// ======================================================
+// 7. Read district properties
+// ======================================================
+
+function getDistrictName(properties) {
+    return getProperty(properties, [
+        "district",
+        "district_name",
+        "DISTRICT",
+        "District",
+        "name",
+        "NAME_2",
+        "ADM2_EN"
+    ]);
+}
+
+function getProvinceName(properties) {
+    return getProperty(properties, [
+        "province",
+        "province_name",
+        "PROVINCE",
+        "Province",
+        "ADM1_EN",
+        "NAME_1"
+    ]);
+}
+
+function getPopulation(properties) {
+    return getProperty(properties, [
+        "pop_2023",
+        "population_2023",
+        "population",
+        "Population",
+        "POPULATION",
+        "pop",
+        "TOT_POP"
+    ]);
+}
+
+function getArea(properties) {
+    return getProperty(properties, [
+        "area_km2",
+        "area",
+        "Area",
+        "AREA_KM2",
+        "Shape_Area"
+    ]);
+}
 
 // ======================================================
-// 6. Classify districts by population
+// 8. Population classification
 // ======================================================
 
 function colourFor(population) {
     if (
         population === null ||
         population === undefined ||
-        population === "" ||
-        !Number.isFinite(Number(population))
+        String(population).trim() === ""
     ) {
         return "#c9cfd1";
     }
 
-    const value = Number(population);
+    // Remove commas from numeric text such as "1,200,000"
+    const value = Number(
+        String(population).replace(/,/g, "")
+    );
+
+    if (!Number.isFinite(value)) {
+        return "#c9cfd1";
+    }
 
     if (value > 3000000) return "#7f2704";
     if (value > 1500000) return "#d94801";
@@ -83,129 +186,142 @@ function colourFor(population) {
     return "#fdd0a2";
 }
 
-
 // ======================================================
-// 7. Define the style for each district
+// 9. Style each district
 // ======================================================
 
 function styleFor(feature) {
     return {
-        color: "#ffffff",
+        color: "#333333",
         weight: 1,
+        opacity: 1,
         fillColor: colourFor(
-            feature.properties?.pop_2023
+            getPopulation(feature.properties)
         ),
-        fillOpacity: 0.8
+        fillOpacity: 0.75
     };
 }
 
-
 // ======================================================
-// 8. Draw districts and attach popup information
+// 10. Draw the GeoJSON district layer
 // ======================================================
 
 function draw(features) {
-
-    // Remove the previous district layer
-    if (layer) {
-        map.removeLayer(layer);
+    // Remove the old layer before drawing a new one
+    if (districtLayer) {
+        map.removeLayer(districtLayer);
+        districtLayer = null;
     }
 
-    // Create the new GeoJSON layer
-    layer = L.geoJSON(
+    const validFeatures = features.filter(function (feature) {
+        return (
+            feature &&
+            feature.geometry &&
+            (
+                feature.geometry.type === "Polygon" ||
+                feature.geometry.type === "MultiPolygon"
+            )
+        );
+    });
+
+    console.log("District features to draw:", validFeatures.length);
+
+    districtLayer = L.geoJSON(
         {
             type: "FeatureCollection",
-            features: features
+            features: validFeatures
         },
         {
             style: styleFor,
 
             onEachFeature: function (feature, featureLayer) {
-                const p = feature.properties || {};
+                const properties = feature.properties || {};
+
+                const district = getDistrictName(properties);
+                const province = getProvinceName(properties);
+                const population = getPopulation(properties);
+                const area = getArea(properties);
 
                 const popupContent =
-                    "<b>" + show(p.district) + "</b><br>" +
-                    "Province: " + show(p.province) + "<br>" +
-                    "Population: " + show(p.pop_2023) + "<br>" +
-                    "Area: " + show(p.area_km2) + " km²";
+                    "<strong>" + show(district) + "</strong><br>" +
+                    "Province: " + show(province) + "<br>" +
+                    "Population: " + show(population) + "<br>" +
+                    "Area: " + show(area) + " km²";
 
                 featureLayer.bindPopup(popupContent);
             }
         }
     ).addTo(map);
 
-    // Zoom to the displayed districts
-    if (features.length > 0) {
-        const bounds = layer.getBounds();
+    // Fit the map to the actual district boundaries
+    const bounds = districtLayer.getBounds();
 
-        if (bounds.isValid()) {
-            map.fitBounds(bounds, {
-                padding: [10, 10],
-                maxZoom: 8
-            });
-        }
+    if (bounds.isValid()) {
+        map.fitBounds(bounds, {
+            padding: [15, 15],
+            maxZoom: 8
+        });
     } else {
+        console.error(
+            "No valid district boundaries found in the GeoJSON."
+        );
+
         map.setView([30.3753, 69.3451], 5);
     }
 
-    // Update the displayed district count
+    // Update district count
     const countElement = document.getElementById("count");
 
     if (countElement) {
         countElement.textContent =
-            features.length + " districts";
+            validFeatures.length + " districts";
     }
 }
 
-
 // ======================================================
-// 9. Fill the province dropdown
+// 11. Fill province dropdown
 // ======================================================
 
 function fillProvinceList() {
     const select = document.getElementById("province");
 
-    if (!select || !districts) {
-        return;
-    }
+    if (!select || !districts) return;
 
-    // Get unique province names from the GeoJSON
-    const provinces = [
-        ...new Set(
-            districts.features.map(function (feature) {
-                return feature.properties?.province;
-            })
-        )
-    ]
+    const provinceNames = districts.features
+        .map(function (feature) {
+            return getProvinceName(feature.properties);
+        })
         .filter(function (name) {
             return (
                 name !== null &&
                 name !== undefined &&
                 String(name).trim() !== ""
             );
-        })
-        .sort(function (a, b) {
-            return String(a).localeCompare(String(b));
         });
 
-    // Reset the dropdown
+    const uniqueProvinces = [
+        ...new Set(provinceNames.map(String))
+    ].sort(function (a, b) {
+        return a.localeCompare(b);
+    });
+
     select.innerHTML =
         '<option value="all">All provinces</option>';
 
-    // Add one option for each province
-    for (const name of provinces) {
+    uniqueProvinces.forEach(function (province) {
         const option = document.createElement("option");
 
-        option.value = name;
-        option.textContent = name;
+        option.value = province;
+        option.textContent = province;
 
         select.appendChild(option);
-    }
+    });
+
+    console.log("Province options:", uniqueProvinces);
 }
 
-
 // ======================================================
-// 10. Create the population legend
+// 12. Population legend
 // ======================================================
 
 const legend = L.control({
@@ -216,52 +332,35 @@ legend.onAdd = function () {
     const div = L.DomUtil.create("div", "legend");
 
     const categories = [
-        {
-            color: colourFor(300000),
-            label: "300,000 or less"
-        },
-        {
-            color: colourFor(300001),
-            label: "300,001 – 750,000"
-        },
-        {
-            color: colourFor(750001),
-            label: "750,001 – 1.5 million"
-        },
-        {
-            color: colourFor(1500001),
-            label: "1.5 – 3 million"
-        },
-        {
-            color: colourFor(3000001),
-            label: "Over 3 million"
-        },
-        {
-            color: colourFor(null),
-            label: "No census data"
-        }
+        { value: 100000, label: "300,000 or less" },
+        { value: 500000, label: "300,001 – 750,000" },
+        { value: 1000000, label: "750,001 – 1.5 million" },
+        { value: 2000000, label: "1.5 – 3 million" },
+        { value: 4000000, label: "Over 3 million" },
+        { value: null, label: "No population data" }
     ];
 
-    let legendHTML = "<strong>Population (2023)</strong><br>";
+    let html = "<strong>Population (2023)</strong>";
 
-    for (const category of categories) {
-        legendHTML +=
+    categories.forEach(function (category) {
+        html +=
             '<div class="legend-item">' +
-            '<i style="background:' + category.color + '"></i>' +
+            '<i style="background:' +
+            colourFor(category.value) +
+            '"></i>' +
             "<span>" + category.label + "</span>" +
             "</div>";
-    }
+    });
 
-    div.innerHTML = legendHTML;
+    div.innerHTML = html;
 
     return div;
 };
 
 legend.addTo(map);
 
-
 // ======================================================
-// 11. Set up the province filter
+// 13. Province filter
 // ======================================================
 
 function setupProvinceFilter() {
@@ -274,28 +373,28 @@ function setupProvinceFilter() {
         return;
     }
 
-    select.addEventListener("change", function (event) {
+    select.addEventListener("change", function () {
+        if (!districts) return;
 
-        if (!districts) {
-            return;
-        }
+        const chosenProvince = select.value;
 
-        const chosen = event.target.value;
+        const filteredFeatures =
+            chosenProvince === "all"
+                ? districts.features
+                : districts.features.filter(function (feature) {
+                    const province = getProvinceName(
+                        feature.properties
+                    );
 
-        // Display all districts or only the selected province
-        const subset = chosen === "all"
-            ? districts.features
-            : districts.features.filter(function (feature) {
-                return feature.properties?.province === chosen;
-            });
+                    return String(province) === chosenProvince;
+                });
 
-        draw(subset);
+        draw(filteredFeatures);
     });
 }
 
-
 // ======================================================
-// 12. Load the GeoJSON file
+// 14. Load the GeoJSON file
 // ======================================================
 
 async function loadData() {
@@ -306,44 +405,61 @@ async function loadData() {
             countElement.textContent = "Loading districts...";
         }
 
-        // IMPORTANT:
-        // districts_C.geojson is in the same folder as index.html
-        // and app.js, so use this relative path.
         const response = await fetch("./districts_C.geojson");
 
         if (!response.ok) {
             throw new Error(
-                "Could not load GeoJSON. HTTP status: " +
-                response.status
+                "GeoJSON request failed: HTTP " + response.status
             );
         }
 
-        districts = await response.json();
+        const data = await response.json();
 
-        // Validate the GeoJSON structure
         if (
-            !districts ||
-            districts.type !== "FeatureCollection" ||
-            !Array.isArray(districts.features)
+            !data ||
+            data.type !== "FeatureCollection" ||
+            !Array.isArray(data.features)
         ) {
             throw new Error(
-                "Invalid GeoJSON. Expected a FeatureCollection."
+                "Invalid GeoJSON: expected a FeatureCollection."
             );
         }
 
-        console.log(
-            "GeoJSON loaded successfully. Features:",
-            districts.features.length
-        );
+        // Keep only features with polygon geometry
+        districts = {
+            type: "FeatureCollection",
+            features: data.features
+        };
+
+        console.log("GeoJSON loaded successfully.");
+        console.log("Total features:", districts.features.length);
 
         if (districts.features.length > 0) {
             console.log(
                 "First feature properties:",
                 districts.features[0].properties
             );
+
+            console.log(
+                "First feature geometry:",
+                districts.features[0].geometry
+            );
         }
 
-        // Populate the dropdown and display the districts
+        const polygonCount = districts.features.filter(
+            function (feature) {
+                return (
+                    feature.geometry &&
+                    (
+                        feature.geometry.type === "Polygon" ||
+                        feature.geometry.type === "MultiPolygon"
+                    )
+                );
+            }
+        ).length;
+
+        console.log("Polygon features:", polygonCount);
+
         fillProvinceList();
         draw(districts.features);
 
@@ -352,14 +468,13 @@ async function loadData() {
 
         if (countElement) {
             countElement.textContent =
-                "Could not load districts. Check the console.";
+                "Districts failed to load. Check Console.";
         }
     }
 }
 
-
 // ======================================================
-// 13. Start the application
+// 15. Start the application
 // ======================================================
 
 setupProvinceFilter();

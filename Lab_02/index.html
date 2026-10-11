@@ -1,0 +1,50 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>District Explorer</title>
+
+    <!-- Leaflet map styling -->
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    >
+
+    <!-- Your own CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <header>
+        <h1>District Explorer</h1>
+        <p class="subtitle">
+            Districts of Pakistan, shaded by population
+        </p>
+    </header>
+
+    <!-- Province filter and district count -->
+    <div id="panel">
+        <label for="province">Filter by province:</label>
+
+        <select id="province">
+            <option value="all">All provinces</option>
+        </select>
+
+        <span id="count">Loading districts...</span>
+    </div>
+
+    <!-- Map container -->
+    <div id="map"></div>
+
+    <!-- Leaflet JavaScript library -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Your application JavaScript -->
+    <script src="app.js"></script>
+
+</body>
+</html>

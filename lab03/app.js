@@ -547,8 +547,8 @@ async function loadData() {
     try {
         const [districtResponse, pointResponse] =
             await Promise.all([
-                fetch("data/districts.geojson"),
-                fetch("data/district_points.geojson")
+                fetch("districts.geojson"),
+                fetch("district_points.geojson")
             ]);
 
         if (!districtResponse.ok) {
